@@ -1,0 +1,6 @@
+{
+"name": "uw-proxy",
+"version": "1.0.0",
+"main": "uw-proxy.js",
+"scripts": { "start": "node uw-proxy.js" }
+}
