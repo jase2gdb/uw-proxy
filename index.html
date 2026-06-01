@@ -87,6 +87,15 @@
   @keyframes spin { to{transform:rotate(360deg)} }
   @keyframes shimmer { 0%{opacity:.2;transform:translateX(-100%)} 50%{opacity:1} 100%{opacity:.2;transform:translateX(100%)} }
 
+  #search-wrap { padding: 0 0 10px 0; }
+  #search { width: 100%; background: #0a0e16; border: 1px solid #1e293b; border-radius: 8px; padding: 8px 14px 8px 32px; color: #e2e8f0; font-family: monospace; font-size: 12px; outline: none; letter-spacing: 1px; }
+  #search:focus { border-color: #334155; }
+  #search::placeholder { color: #334155; }
+  .search-wrap-inner { position: relative; }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #334155; font-size: 12px; pointer-events: none; }
+  #search-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #475569; cursor: pointer; font-size: 14px; display: none; padding: 0; }
+  #search-results-label { font-size: 9px; color: #475569; letter-spacing: 1.5px; margin-top: 6px; display: none; }
+
   ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-thumb { background: #1e293b; }
 </style>
@@ -123,6 +132,14 @@
     <span class="sort-label">SORT:</span>
     <button class="filter-btn active" id="sort-score" onclick="setSort('SCORE',this)">SCORE</button>
     <button class="filter-btn" id="sort-dte" onclick="setSort('DTE',this)">DTE</button>
+  </div>
+  <div id="search-wrap">
+    <div class="search-wrap-inner">
+      <span class="search-icon">⌕</span>
+      <input id="search" type="text" placeholder="SEARCH TICKER — e.g. NVDA, TSLA, SPY…" oninput="onSearch(this.value)" />
+      <button id="search-clear" onclick="clearSearch()">✕</button>
+    </div>
+    <div id="search-results-label"></div>
   </div>
 </div>
 
@@ -161,6 +178,7 @@ const TAG_COLORS = {
 let allFlow = [];
 let currentFilter = 'ALL';
 let currentSort = 'SCORE';
+let currentSearch = '';
 
 function scoreFlow(f) {
   let score = 0;
@@ -263,8 +281,10 @@ function renderCard(f) {
 }
 
 function render() {
+  const searchTerm = currentSearch.trim().toUpperCase();
   const filtered = allFlow
     .filter(f => {
+      if (searchTerm && f.ticker !== searchTerm) return false;
       if (currentFilter==='HIGH') return f.score>=85;
       if (currentFilter==='BULL') return f.bull;
       if (currentFilter==='BEAR') return !f.bull;
@@ -272,6 +292,18 @@ function render() {
       return true;
     })
     .sort((a,b) => currentSort==='SCORE' ? b.score-a.score : (a.dte||999)-(b.dte||999));
+
+  // Update search results label
+  const label = document.getElementById('search-results-label');
+  if (searchTerm) {
+    label.style.display = 'block';
+    label.textContent = filtered.length
+      ? `${filtered.length} result${filtered.length>1?'s':''} for ${searchTerm}`
+      : `NO RESULTS FOR ${searchTerm}`;
+    label.style.color = filtered.length ? '#00ff88' : '#ff4560';
+  } else {
+    label.style.display = 'none';
+  }
 
   // Stats
   document.getElementById('s-hi').textContent  = allFlow.filter(f=>f.score>=85).length+' alerts';
@@ -301,6 +333,19 @@ function render() {
   document.getElementById('cards').innerHTML = filtered.map(renderCard).join('');
   document.getElementById('disclaimer').style.display = filtered.length ? 'block' : 'none';
   document.getElementById('empty').style.display = (!filtered.length && allFlow.length) ? 'block' : 'none';
+}
+
+function onSearch(val) {
+  currentSearch = val.trim().toUpperCase();
+  document.getElementById('search-clear').style.display = val ? 'block' : 'none';
+  render();
+}
+
+function clearSearch() {
+  currentSearch = '';
+  document.getElementById('search').value = '';
+  document.getElementById('search-clear').style.display = 'none';
+  render();
 }
 
 async function loadData() {
