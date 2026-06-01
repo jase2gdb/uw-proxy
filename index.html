@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>UW Flow Signal Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #060a0f; color: #e2e8f0; font-family: 'Courier New', monospace; min-height: 100vh; }
+
+  #header { background: #080c12; border-bottom: 1px solid #0f172a; padding: 12px 16px 0; position: sticky; top: 0; z-index: 99; }
+  .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .logo { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #00ff88; box-shadow: 0 0 8px #00ff88; animation: pulse 1.5s infinite; }
+  .logo-text { font-size: 11px; font-weight: 800; color: #00ff88; letter-spacing: 3px; }
+  .logo-sub { font-size: 9px; color: #334155; }
+  .header-btns { display: flex; gap: 6px; align-items: center; }
+  .last-fetch { font-size: 9px; color: #334155; }
+  .btn { background: transparent; border: 1px solid #1e293b; border-radius: 6px; color: #64748b; padding: 3px 10px; font-size: 9px; cursor: pointer; font-family: monospace; letter-spacing: 1px; }
+  .btn:hover { color: #94a3b8; border-color: #334155; }
+
+  .stats { display: flex; gap: 6px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px; }
+  .stat { background: #0a0e16; border: 1px solid #1e293b; border-radius: 7px; padding: 4px 10px; white-space: nowrap; flex-shrink: 0; }
+  .stat-label { font-size: 8px; color: #475569; letter-spacing: 1px; }
+  .stat-val { font-size: 10px; font-weight: 700; }
+
+  .filters { display: flex; gap: 5px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .filter-btn { background: transparent; border: 1px solid #1a2035; border-radius: 6px; color: #475569; padding: 3px 10px; font-size: 9px; font-weight: 700; cursor: pointer; font-family: monospace; letter-spacing: 1px; }
+  .filter-btn.active { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  .sort-label { font-size: 9px; color: #475569; margin-left: auto; }
+
+  #body { padding: 14px 16px; max-width: 640px; margin: 0 auto; }
+
+  #error { background: #1a0a0d; border: 1px solid #ff456040; border-radius: 8px; padding: 8px 14px; font-size: 11px; color: #ff4560; margin-bottom: 12px; display: none; }
+
+  #spinner { text-align: center; padding: 60px 0; color: #334155; display: none; }
+  .spin { width: 28px; height: 28px; border: 3px solid #1e293b; border-top-color: #00ff88; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 12px; }
+
+  #empty { text-align: center; padding: 60px 0; color: #334155; display: none; }
+
+  /* Top pick */
+  #toppick { background: linear-gradient(135deg,#071a0f,#060d1a); border: 1px solid #00ff8835; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; position: relative; overflow: hidden; display: none; }
+  #toppick::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background: linear-gradient(90deg,#00ff88,#60a5fa,#00ff88); }
+  .tp-label { font-size: 9px; font-weight: 800; color: #00ff88; letter-spacing: 2px; margin-bottom: 8px; }
+  .tp-body { display: flex; gap: 12px; align-items: center; }
+  .tp-info { }
+  .tp-title { font-size: 17px; font-weight: 900; color: #fff; letter-spacing: 1px; }
+  .tp-title span { color: #00ff88; font-size: 14px; }
+  .tp-meta { font-size: 11px; color: #64748b; margin-top: 3px; }
+  .tp-note { font-size: 10px; color: #475569; margin-top: 5px; font-style: italic; }
+
+  /* Cards */
+  #cards { display: flex; flex-direction: column; gap: 8px; }
+  .card { border-radius: 12px; padding: 14px 16px; position: relative; overflow: hidden; border: 1px solid #1e293b; }
+  .card.hi { background: linear-gradient(135deg,#0a1a0d,#0d1117); border-color: #00ff8830; }
+  .card.lo { background: linear-gradient(135deg,#1a0a0d,#0d1117); border-color: #ff456030; }
+  .card.mid { background: #0d1117; }
+  .card.hi::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background: linear-gradient(90deg,transparent,#00ff88,transparent); animation: shimmer 2.5s infinite; }
+
+  .card-top { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+  .ring-wrap { position: relative; width: 60px; height: 60px; flex-shrink: 0; }
+  .ring-wrap svg { transform: rotate(-90deg); }
+  .ring-score { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; font-family: monospace; }
+  .card-header { flex: 1; min-width: 0; }
+  .card-title-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 3px; }
+  .ticker { font-size: 20px; font-weight: 900; color: #fff; letter-spacing: 1px; }
+  .type-badge { border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 700; }
+  .type-badge.call { background: #00ff8818; color: #00ff88; border: 1px solid #00ff8840; }
+  .type-badge.put  { background: #ff456018; color: #ff4560; border: 1px solid #ff456040; }
+  .signal-badge { border-radius: 4px; padding: 1px 7px; font-size: 9px; font-weight: 800; letter-spacing: 1.5px; margin-left: auto; }
+  .card-meta { font-size: 11px; color: #64748b; display: flex; gap: 12px; flex-wrap: wrap; }
+  .side-bid { color: #f5c842; }
+  .side-ask { color: #60a5fa; }
+
+  .card-stats { display: flex; gap: 12px; margin-bottom: 10px; }
+  .stat-box { flex: 1; text-align: center; }
+  .stat-box-label { font-size: 9px; color: #475569; letter-spacing: 1px; margin-bottom: 2px; }
+  .stat-box-val { font-size: 13px; font-weight: 700; color: #e2e8f0; }
+  .stat-box-val.repeat { color: #a78bfa; }
+
+  .tags { display: flex; gap: 5px; flex-wrap: wrap; }
+  .tag { border-radius: 4px; padding: 1px 6px; font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+
+  #disclaimer { margin-top: 20px; padding: 12px 14px; background: #080c12; border: 1px solid #0f172a; border-radius: 8px; font-size: 10px; color: #334155; line-height: 1.7; font-style: italic; }
+
+  @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(.6);opacity:.4} }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  @keyframes shimmer { 0%{opacity:.2;transform:translateX(-100%)} 50%{opacity:1} 100%{opacity:.2;transform:translateX(100%)} }
+
+  ::-webkit-scrollbar { width: 3px; }
+  ::-webkit-scrollbar-thumb { background: #1e293b; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="header-top">
+    <div class="logo">
+      <div class="dot"></div>
+      <span class="logo-text">UNUSUAL WHALES</span>
+      <span class="logo-sub">FLOW SIGNALS</span>
+    </div>
+    <div class="header-btns">
+      <span class="last-fetch" id="lastFetch"></span>
+      <button class="btn" onclick="loadData()">↺ REFRESH</button>
+    </div>
+  </div>
+
+  <div class="stats" id="stats">
+    <div class="stat"><span class="stat-label">85+ </span><span class="stat-val" id="s-hi" style="color:#00ff88">—</span></div>
+    <div class="stat"><span class="stat-label">AVG DTE </span><span class="stat-val" id="s-dte" style="color:#60a5fa">—</span></div>
+    <div class="stat"><span class="stat-label">BULL/BEAR </span><span class="stat-val" id="s-bb" style="color:#f5c842">—</span></div>
+    <div class="stat"><span class="stat-label">SWEEPS </span><span class="stat-val" id="s-sw" style="color:#a78bfa">—</span></div>
+    <div class="stat"><span class="stat-label">TOTAL </span><span class="stat-val" id="s-tot" style="color:#475569">—</span></div>
+  </div>
+
+  <div class="filters">
+    <button class="filter-btn active" onclick="setFilter('ALL',this)">ALL</button>
+    <button class="filter-btn" onclick="setFilter('HIGH',this)">HIGH</button>
+    <button class="filter-btn" onclick="setFilter('BULL',this)">BULL</button>
+    <button class="filter-btn" onclick="setFilter('BEAR',this)">BEAR</button>
+    <button class="filter-btn" onclick="setFilter('SKEPTICAL',this)">SKEPTICAL</button>
+    <span class="sort-label">SORT:</span>
+    <button class="filter-btn active" id="sort-score" onclick="setSort('SCORE',this)">SCORE</button>
+    <button class="filter-btn" id="sort-dte" onclick="setSort('DTE',this)">DTE</button>
+  </div>
+</div>
+
+<div id="body">
+  <div id="error"></div>
+  <div id="spinner"><div class="spin"></div><div style="font-size:10px;letter-spacing:2px">FETCHING FLOW…</div></div>
+  <div id="empty">🐳<br><br><span style="font-size:11px;letter-spacing:2px">NO DATA</span></div>
+  <div id="toppick">
+    <div class="tp-label">⚡ BEST SIGNAL</div>
+    <div class="tp-body">
+      <div class="ring-wrap" id="tp-ring"></div>
+      <div class="tp-info">
+        <div class="tp-title" id="tp-title"></div>
+        <div class="tp-meta" id="tp-meta"></div>
+        <div class="tp-note" id="tp-note"></div>
+      </div>
+    </div>
+  </div>
+  <div id="cards"></div>
+  <div id="disclaimer" style="display:none">Flow is a timing signal — not a guarantee. Confirm with price action + catalyst thesis before acting.</div>
+</div>
+
+<script>
+const TAG_COLORS = {
+  SWEEP:         {bg:'#00ff8818',border:'#00ff8840',color:'#00ff88'},
+  BID:           {bg:'#f5c84218',border:'#f5c84240',color:'#f5c842'},
+  OTM:           {bg:'#f5c84218',border:'#f5c84240',color:'#f5c842'},
+  'SHORT DTE':   {bg:'#ff6b0018',border:'#ff6b0040',color:'#ff6b00'},
+  REPEAT:        {bg:'#a78bfa18',border:'#a78bfa40',color:'#a78bfa'},
+  FLOOR:         {bg:'#60a5fa18',border:'#60a5fa40',color:'#60a5fa'},
+  'DEEP ITM':    {bg:'#ff456018',border:'#ff456040',color:'#ff4560'},
+  'INDEX HEDGE': {bg:'#ff456018',border:'#ff456040',color:'#ff4560'},
+  ISOLATED:      {bg:'#1e293b',  border:'#33415540',color:'#475569'},
+};
+
+let allFlow = [];
+let currentFilter = 'ALL';
+let currentSort = 'SCORE';
+
+function scoreFlow(f) {
+  let score = 0;
+  const tags = [];
+  const ticker   = (f.ticker || '?').toUpperCase();
+  const isCall   = (f.type || '').toLowerCase() === 'call';
+  const isPut    = (f.type || '').toLowerCase() === 'put';
+  const strike   = parseFloat(f.strike || 0);
+  const spot     = parseFloat(f.underlying_price || strike);
+  const isOTM    = spot > 0 && (isCall ? strike > spot : strike < spot);
+  const isDeepITM= spot > 0 && (isCall ? strike < spot*0.95 : strike > spot*1.05);
+  const otmPct   = spot > 0 ? Math.abs((strike-spot)/spot)*100 : 0;
+  const isSweep  = f.has_sweep === true;
+  const isFloor  = f.has_floor === true;
+  const premium  = parseFloat(f.total_premium || 0);
+  const bidPrem  = parseFloat(f.total_bid_side_prem || 0);
+  const askPrem  = parseFloat(f.total_ask_side_prem || 0);
+  const isBid    = bidPrem > askPrem;
+  const repeats  = parseInt(f.trade_count || 1, 10);
+  const isIndex  = ['SPY','QQQ','IWM','DIA','VIX'].includes(ticker) && isPut;
+  const expDate  = f.expiry ? new Date(f.expiry) : null;
+  const dte      = expDate ? Math.ceil((expDate - new Date()) / 86400000) : 99;
+
+  if (isSweep)              { score += 25; tags.push('SWEEP'); }
+  if (isBid)                { score += 20; tags.push('BID'); }
+  if (isOTM)                { score += 20; tags.push('OTM'); }
+  if (dte > 0 && dte <= 21) { score += 15; tags.push('SHORT DTE'); }
+  if (repeats >= 5)         { score += 30; tags.push('REPEAT'); }
+  else if (repeats >= 3)    { score += 20; tags.push('REPEAT'); }
+  if (premium > 500000)     { score += 10; }
+  if (isFloor)              { score += 10; tags.push('FLOOR'); }
+  if (isDeepITM)            { score = Math.max(score-30, 0); tags.push('DEEP ITM'); }
+  if (isIndex)              { score = Math.max(score-25, 0); tags.push('INDEX HEDGE'); }
+  if (repeats < 3 && !isSweep && !isFloor) tags.push('ISOLATED');
+
+  const fmt = p => p>=1e6?`$${(p/1e6).toFixed(2)}M`:p>=1e3?`$${(p/1e3).toFixed(0)}K`:`$${Math.round(p)}`;
+
+  return {
+    id: f.id || ticker+Math.random(),
+    ticker, strike, otmPct: otmPct.toFixed(1),
+    type: isCall?'CALL':'PUT', expiry: f.expiry||'—',
+    dte: dte<999?dte:'—', side: isBid?'BID':'ASK',
+    size: parseInt(f.total_size||0,10), premium: fmt(premium),
+    score: Math.min(score,100), repeat: repeats,
+    bull: isCall, tags,
+  };
+}
+
+function scoreColor(s) { return s>=85?'#00ff88':s>=65?'#f5c842':'#ff4560'; }
+function scoreLabel(s) { return s>=85?'HIGH SIGNAL':s>=65?'WATCH':'SKEPTICAL'; }
+
+function ring(score, size=60) {
+  const c = scoreColor(score);
+  const r = size/2 - 5;
+  const circ = 2*Math.PI*r;
+  const dash = (score/100)*circ;
+  return `<div class="ring-wrap" style="width:${size}px;height:${size}px">
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg)">
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#1a2035" stroke-width="5"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${c}" stroke-width="5"
+        stroke-dasharray="${dash} ${circ}" stroke-linecap="round"
+        style="filter:drop-shadow(0 0 5px ${c})"/>
+    </svg>
+    <div class="ring-score" style="color:${c}">${score}</div>
+  </div>`;
+}
+
+function renderCard(f) {
+  const cls = f.score>=85?'hi':f.score<65?'lo':'mid';
+  const ac = scoreColor(f.score);
+  const sideClass = f.side==='BID'?'side-bid':'side-ask';
+  const tags = f.tags.map(t => {
+    const s = TAG_COLORS[t]||{bg:'#1e293b',border:'#334155',color:'#475569'};
+    return `<span class="tag" style="background:${s.bg};border:1px solid ${s.border};color:${s.color}">${t}</span>`;
+  }).join('');
+  const rpts = '●'.repeat(Math.min(f.repeat,4))+'○'.repeat(Math.max(0,4-f.repeat));
+  return `<div class="card ${cls}">
+    <div class="card-top">
+      ${ring(f.score)}
+      <div class="card-header">
+        <div class="card-title-row">
+          <span class="ticker">${f.ticker}</span>
+          <span class="type-badge ${f.type.toLowerCase()}">${f.type}</span>
+          <span class="signal-badge" style="background:${ac}18;color:${ac};border:1px solid ${ac}35">${scoreLabel(f.score)}</span>
+        </div>
+        <div class="card-meta">
+          <span>$${f.strike} · ${f.otmPct}% OTM</span>
+          <span>${f.expiry} · ${f.dte}d</span>
+          <span class="${sideClass}">${f.side}</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-stats">
+      <div class="stat-box"><div class="stat-box-label">PREM</div><div class="stat-box-val">${f.premium}</div></div>
+      <div class="stat-box"><div class="stat-box-label">SIZE</div><div class="stat-box-val">${f.size.toLocaleString()}</div></div>
+      <div class="stat-box"><div class="stat-box-label">TRADES</div><div class="stat-box-val ${f.repeat>=3?'repeat':''}">${rpts}</div></div>
+    </div>
+    <div class="tags">${tags}</div>
+  </div>`;
+}
+
+function render() {
+  const filtered = allFlow
+    .filter(f => {
+      if (currentFilter==='HIGH') return f.score>=85;
+      if (currentFilter==='BULL') return f.bull;
+      if (currentFilter==='BEAR') return !f.bull;
+      if (currentFilter==='SKEPTICAL') return f.score<65;
+      return true;
+    })
+    .sort((a,b) => currentSort==='SCORE' ? b.score-a.score : (a.dte||999)-(b.dte||999));
+
+  // Stats
+  document.getElementById('s-hi').textContent  = allFlow.filter(f=>f.score>=85).length+' alerts';
+  document.getElementById('s-bb').textContent  = allFlow.filter(f=>f.bull).length+'/'+allFlow.filter(f=>!f.bull).length;
+  document.getElementById('s-sw').textContent  = allFlow.filter(f=>f.tags.includes('SWEEP')).length;
+  document.getElementById('s-tot').textContent = allFlow.length;
+  const avgDte = allFlow.length ? (allFlow.reduce((s,f)=>s+(+f.dte||0),0)/allFlow.length).toFixed(1) : '—';
+  document.getElementById('s-dte').textContent = avgDte+'d';
+
+  // Top pick
+  const top = currentFilter!=='SKEPTICAL' ? filtered.find(f=>f.score>=85) : null;
+  const tpEl = document.getElementById('toppick');
+  if (top) {
+    tpEl.style.display = 'block';
+    document.getElementById('tp-ring').innerHTML = ring(top.score, 64);
+    document.getElementById('tp-title').innerHTML = `${top.ticker} $${top.strike}${top.type[0]} <span>${top.expiry}</span>`;
+    document.getElementById('tp-meta').textContent = `${top.premium} · ${top.otmPct}% OTM · ${top.dte}d DTE · ${top.side} · ${top.repeat} trades`;
+    const convictionTags = top.tags.filter(t=>['SWEEP','OTM','SHORT DTE','REPEAT'].includes(t)).length;
+    document.getElementById('tp-note').textContent = convictionTags>=3
+      ? `All conviction signals present — sweep, OTM, short DTE, repeated ${top.repeat}×`
+      : 'Strong signal — confirm with price action + catalyst';
+  } else {
+    tpEl.style.display = 'none';
+  }
+
+  // Cards
+  document.getElementById('cards').innerHTML = filtered.map(renderCard).join('');
+  document.getElementById('disclaimer').style.display = filtered.length ? 'block' : 'none';
+  document.getElementById('empty').style.display = (!filtered.length && allFlow.length) ? 'block' : 'none';
+}
+
+async function loadData() {
+  document.getElementById('spinner').style.display = 'block';
+  document.getElementById('error').style.display = 'none';
+  document.getElementById('empty').style.display = 'none';
+  try {
+    const res = await fetch('/flow');
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    const json = await res.json();
+    const arr = json.data ?? json.results ?? (Array.isArray(json)?json:[]);
+    allFlow = arr.map(scoreFlow);
+    document.getElementById('lastFetch').textContent = new Date().toLocaleTimeString();
+    render();
+  } catch(e) {
+    const el = document.getElementById('error');
+    el.textContent = '⚠ '+e.message;
+    el.style.display = 'block';
+  } finally {
+    document.getElementById('spinner').style.display = 'none';
+  }
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filters .filter-btn').forEach(b => {
+    if (['ALL','HIGH','BULL','BEAR','SKEPTICAL'].includes(b.textContent)) b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  render();
+}
+
+function setSort(s, btn) {
+  currentSort = s;
+  document.getElementById('sort-score').classList.toggle('active', s==='SCORE');
+  document.getElementById('sort-dte').classList.toggle('active', s==='DTE');
+  render();
+}
+
+// Load on start, refresh every 60s
+loadData();
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
